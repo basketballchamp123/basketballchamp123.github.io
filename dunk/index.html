@@ -763,13 +763,29 @@ button:disabled{opacity:.4;cursor:default}
   }
 
   /* ---------- sound ---------- */
-  let AC = null, soundOn = true;
+  let AC = null, soundOn = true, speechPrimed = false;
+  // Phones only allow sound to start from a tap, and can pause it again later
+  // (app switch, screen lock), so this runs on every tap, not just the first.
   function initAudio(){
+    if (!soundOn) return;
     try {
+      // iOS: play through the silent switch, like a video would
+      if (navigator.audioSession) navigator.audioSession.type = 'playback';
       if (!AC){ const C = window.AudioContext || window.webkitAudioContext; if (C) AC = new C(); }
-      if (AC && AC.state === 'suspended') AC.resume();
+      if (AC && AC.state !== 'running') AC.resume();
     } catch(e){}
+    // iOS: the voice stays blocked until something is spoken during a tap
+    if (!speechPrimed && 'speechSynthesis' in window){
+      try {
+        const u = new SpeechSynthesisUtterance(' ');
+        u.volume = 0;
+        speechSynthesis.speak(u);
+        speechPrimed = true;
+      } catch(e){}
+    }
   }
+  ['touchend','pointerup','click','keydown'].forEach(ev =>
+    document.addEventListener(ev, initAudio, {capture:true, passive:true}));
   function noise(dur, type, freq, gain, attack){
     if (!AC || !soundOn) return;
     try {
