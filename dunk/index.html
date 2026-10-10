@@ -1,0 +1,885 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Two in a Row</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Teko:wght@500;600&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E9EDF5; --ink:#1A2340; --muted:#56617F; --panel:#FFFFFF; --line:#D3D9E6;
+  --led-bg:#1A2033; --led-off:#2C3450; --amber:#FFC233; --make:#2FD27A; --miss:#FF5A4E;
+  --jersey:#E4572E; --btn:#1A2340; --btn-ink:#FFFFFF;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D1222; --ink:#E8ECF6; --muted:#9AA4BF; --panel:#161D33; --line:#283152;
+    --btn:#FFC233; --btn-ink:#1A2033;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D1222; --ink:#E8ECF6; --muted:#9AA4BF; --panel:#161D33; --line:#283152;
+  --btn:#FFC233; --btn-ink:#1A2033;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-tap-highlight-color:transparent}
+main{max-width:760px;margin:0 auto;padding:18px 16px 28px}
+h1{font-family:'Teko','Bricolage Grotesque',system-ui,sans-serif;font-weight:600;font-size:clamp(2.6rem,8vw,3.6rem);line-height:.9;margin:0;letter-spacing:.01em}
+.home{display:inline-block;margin-bottom:10px;color:var(--muted);font-weight:600;text-decoration:none}
+.home:hover{text-decoration:underline}
+.rules{margin:6px 0 16px;color:var(--muted);font-size:1rem;line-height:1.45;max-width:60ch}
+
+/* Scoreboard */
+.board{background:var(--led-bg);border-radius:14px;padding:12px 16px;display:grid;grid-template-columns:1fr 1fr auto;gap:12px 20px;align-items:center;color:#C9D0E4}
+.group{display:flex;flex-direction:column;gap:6px}
+.group span{font-size:.82rem}
+.lights{display:flex;gap:8px;flex-wrap:wrap}
+.light{width:26px;height:26px;border-radius:50%;background:var(--led-off);box-shadow:inset 0 0 0 2px #00000033;transition:background .15s, box-shadow .15s}
+.light.make.on{background:var(--make);box-shadow:0 0 14px var(--make)}
+.light.miss.on{background:var(--miss);box-shadow:0 0 14px var(--miss)}
+.stats{display:flex;gap:16px}
+.stat{text-align:center}
+.stat b{display:block;font-family:'Teko',system-ui,sans-serif;font-weight:500;font-size:2rem;line-height:.9;color:var(--amber)}
+.stat small{font-size:.75rem}
+@media (max-width:520px){.board{grid-template-columns:1fr 1fr}.stats{grid-column:1 / -1;justify-content:space-around;border-top:1px solid var(--led-off);padding-top:10px}}
+
+/* Court */
+.court-wrap{position:relative;margin-top:14px;border-radius:14px;overflow:hidden;aspect-ratio:16/10;background:#2A3D6B}
+canvas{display:block;width:100%;height:100%}
+.call{position:absolute;left:16px;top:12px;font-family:'Teko',system-ui,sans-serif;font-size:clamp(1.8rem,6vw,2.6rem);color:#fff;line-height:1;text-shadow:0 2px 0 #0004;pointer-events:none}
+
+/* Meter */
+.controls{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px 16px}
+.status{margin:0 0 12px;font-weight:600;min-height:1.4em}
+.meter{position:relative;height:26px;border-radius:13px;overflow:hidden;background:linear-gradient(90deg,#C7CEDF 0 42%,#FFD873 42% 47.5%,var(--make) 47.5% 52.5%,#FFD873 52.5% 58%,#C7CEDF 58% 100%)}
+.needle{position:absolute;top:-2px;bottom:-2px;width:4px;margin-left:-2px;background:var(--ink);border-radius:2px;left:0}
+.meter-labels{display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted);margin-top:5px}
+.row{display:flex;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap}
+button{font:inherit;cursor:pointer;border:0;border-radius:12px;background:var(--btn);color:var(--btn-ink);font-weight:800;font-size:1.15rem;padding:14px 30px;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+button:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
+button:disabled{opacity:.4;cursor:default}
+.hint{color:var(--muted);font-size:.9rem}
+.legs{margin-left:auto;font-size:.9rem;color:var(--muted)}
+
+/* Overlays */
+.overlay{position:absolute;inset:0;background:rgba(18,24,44,.9);color:#fff;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:16px;gap:10px}
+.overlay[hidden]{display:none}
+.overlay h2{font-family:'Teko',system-ui,sans-serif;font-weight:600;font-size:clamp(2.4rem,9vw,3.6rem);line-height:.85;margin:0;color:var(--amber)}
+.overlay p{margin:0;max-width:44ch;line-height:1.4;color:#D5DBEC}
+.overlay button{background:var(--amber);color:#1A2033}
+.track{position:relative;width:min(92%,520px);height:46px;margin:6px 0;border-radius:6px;background:repeating-linear-gradient(90deg,#D9A066 0 22px,#CF955B 22px 44px);box-shadow:inset 0 0 0 3px #fff}
+.track::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:3px;margin-left:-1.5px;background:#fff}
+.runner{position:absolute;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;background:var(--jersey);border:3px solid #fff;left:6%;z-index:1}
+.clock{font-family:'Teko',system-ui,sans-serif;font-size:2.2rem;line-height:1;color:var(--amber)}
+@media (prefers-reduced-motion:reduce){.light{transition:none}}
+
+/* Team picker */
+.picker{position:fixed;inset:0;z-index:10;background:var(--bg);overflow-y:auto;padding:24px 16px calc(24px + env(safe-area-inset-bottom,0px))}
+.picker[hidden]{display:none}
+.picker-inner{max-width:760px;margin:0 auto}
+.picker h2{font-family:'Teko',system-ui,sans-serif;font-weight:600;font-size:clamp(2.4rem,8vw,3.2rem);line-height:.9;margin:0}
+.picker p{color:var(--muted);margin:6px 0 16px;line-height:1.45}
+.teams{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.team{display:flex;align-items:center;gap:10px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-weight:600;font-size:.95rem;text-align:left;line-height:1.2}
+.team:hover{border-color:var(--ink)}
+.swatch{flex:none;width:28px;height:32px;border-radius:6px 6px 3px 3px;display:grid;place-items:center;font-family:'Teko',system-ui,sans-serif;font-size:1.3rem;line-height:1}
+.numrow{display:flex;gap:24px;align-items:center;flex-wrap:wrap}
+.bigjersey{width:96px;height:112px;border-radius:16px 16px 8px 8px;display:grid;place-items:center;font-family:'Teko',system-ui,sans-serif;font-size:3.8rem;line-height:1}
+.picker label{display:block;font-weight:600;margin-bottom:6px}
+#numInput{font:inherit;font-size:1.6rem;font-weight:600;width:5ch;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+#numInput:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+.link{background:none;color:var(--muted);padding:6px 0;font-size:.9rem;font-weight:600;text-decoration:underline;text-underline-offset:3px}
+</style>
+</head>
+<body>
+<main>
+  <a class="home" href="../">&larr; All games</a>
+  <h1>Two in a Row</h1>
+  <p class="rules">Level 1 is two free throws in a row, level 2 is three, and it keeps going up from there. Miss two in a row on any level and you run a down and back before you get back on the line. Run three down and backs in one level, or airball a shot, and you start over at level 1.</p>
+
+  <section class="board" aria-label="Scoreboard">
+    <div class="group"><span id="makeLabel">Makes in a row</span><div class="lights" id="makeLights"></div></div>
+    <div class="group"><span>Misses in a row</span><div class="lights"><i class="light miss" id="x1"></i><i class="light miss" id="x2"></i></div></div>
+    <div class="stats">
+      <div class="stat"><b id="sLevel">1</b><small>Level</small></div>
+      <div class="stat"><b id="sShots">0</b><small>Shots</small></div>
+      <div class="stat"><b id="sMade">0</b><small>Made</small></div>
+      <div class="stat"><b id="sRuns">0</b><small>Down &amp; backs</small></div>
+    </div>
+  </section>
+
+  <div class="court-wrap">
+    <canvas id="court" aria-label="Free throw court"></canvas>
+    <div class="call" id="call" aria-live="polite"></div>
+
+    <div class="overlay" id="sprint" hidden>
+      <h2>Down and back</h2>
+      <p id="sprintText">Two straight misses. Tap Run as fast as you can, baseline to baseline and back.</p>
+      <div class="track"><div class="runner" id="runner"></div></div>
+      <div class="clock" id="clock">0.00s</div>
+      <button id="runBtn">Run</button>
+    </div>
+
+    <div class="overlay" id="win" hidden>
+      <h2 id="winTitle">Level cleared</h2>
+      <p id="winText"></p>
+      <button id="againBtn">Next level</button>
+    </div>
+  </div>
+
+  <section class="controls">
+    <p class="status" id="status" aria-live="polite">Level 1: make 2 in a row. Stop the needle in the green.</p>
+    <div class="meter" aria-hidden="true"><div class="needle" id="needle"></div></div>
+    <div class="meter-labels"><span>Short</span><span>Pure</span><span>Long</span></div>
+    <div class="row">
+      <button id="shootBtn">Shoot</button>
+      <span class="hint">or press space</span>
+      <span class="legs" id="legs">Legs: fresh</span>
+    </div>
+    <div class="row">
+      <button class="link" id="restartBtn">Restart game</button>
+      <button class="link" id="teamBtn">Change team</button>
+      <button class="link" id="soundBtn">Sound on</button>
+    </div>
+  </section>
+</main>
+
+<div class="picker" id="picker">
+  <div class="picker-inner">
+    <div id="step1">
+      <h2>Pick your team</h2>
+      <p>Your shooter wears their colors, and their fans pack the stands.</p>
+      <div class="teams" id="teams"></div>
+    </div>
+    <div id="step2" hidden>
+      <h2>Pick your number</h2>
+      <p id="numText">Choose any number from 0 to 99.</p>
+      <div class="numrow">
+        <span class="bigjersey" id="bigJersey">2</span>
+        <div>
+          <label for="numInput">Jersey number</label>
+          <input id="numInput" inputmode="numeric" maxlength="2" value="2" autocomplete="off">
+          <div class="row">
+            <button id="startBtn">Start shooting</button>
+            <button class="link" id="backBtn">Pick a different team</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = s => document.querySelector(s);
+  const cv = $('#court'), ctx = cv.getContext('2d');
+  let W = 0, H = 0;
+
+  function resize(){
+    const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    W = r.width; H = r.height;
+    cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  new ResizeObserver(resize).observe(cv);
+  resize();
+
+  const S = {
+    phase:'aim', picking:true, team:null, cheerAt:-1e9, booAt:-1e9, timer:0, level:1, makes:0, misses:0, shots:0, made:0, runs:0,
+    needle:0, dir:1, speed:1.15, best:null,
+    path:null, segStart:0, seg:0, ball:null, result:null, netHit:0, shootPose:0
+  };
+
+  /* ---------- geometry ---------- */
+  function geo(){
+    const floor = H*0.86;
+    const boardX = W*0.86;
+    const rimY = H*0.36;
+    const rimLen = Math.max(36, W*0.075);
+    const rimFront = boardX - rimLen - 4, rimBack = boardX - 4;
+    const rimC = (rimFront + rimBack)/2;
+    const br = Math.max(8, Math.min(W,H*1.6)*0.017);
+    const sx = W*0.2;
+    const rel = {x: sx + br*1.4, y: floor - H*0.44};
+    const hold = {x: sx + br*1.6, y: floor - H*0.3};
+    return {floor, boardX, rimY, rimLen, rimFront, rimBack, rimC, br, sx, rel, hold};
+  }
+
+  /* ---------- shot paths ---------- */
+  function buildPath(kind){
+    const g = geo(), r = g.br, P = [];
+    let cur = {x:g.rel.x, y:g.rel.y};
+    const go = (x,y,arc,dur,tag) => { P.push({x0:cur.x,y0:cur.y,x1:x,y1:y,arc,dur,tag}); cur = {x,y}; };
+    const top = g.rimY - r, arcH = H*0.38, fl = g.floor - r;
+    const drop = () => {
+      go(g.rimC, g.rimY + H*0.13, 0, 240, 'net');
+      go(g.rimC - r*0.6, fl, 0, 300);
+      go(g.rimC - W*0.08, fl, H*0.12, 520);
+      go(g.rimC - W*0.13, fl, H*0.04, 320);
+    };
+    const bounceOut = (x) => { go(x, fl, H*0.06, 420); go(x - W*0.05, fl, H*0.025, 280); };
+    switch(kind){
+      case 'swish': go(g.rimC, top, arcH, 1000); drop(); break;
+      case 'rattleIn':
+        go(g.rimFront + r, top, arcH, 1000, 'rim');
+        go(g.rimBack - r, top - 2, r*1.8, 240, 'rim');
+        go(g.rimC, top, r*0.9, 220);
+        drop(); break;
+      case 'rattleOut':
+        go(g.rimFront + r, top, arcH, 1000, 'rim');
+        go(g.rimBack - r, top - 2, r*1.8, 240, 'rim');
+        go(g.rimFront - W*0.08, top + H*0.03, H*0.08, 400);
+        go(g.rimFront - W*0.17, fl, H*0.02, 520);
+        bounceOut(g.rimFront - W*0.24); break;
+      case 'short':
+        go(g.rimFront, top + r*0.5, arcH*0.95, 980, 'rim');
+        go(g.rimFront - W*0.1, fl, H*0.06, 560);
+        bounceOut(g.rimFront - W*0.17); break;
+      case 'long':
+        go(g.rimBack - r*0.4, top - r*0.4, arcH*1.05, 1020, 'rim');
+        go(g.rimFront - W*0.12, fl, H*0.16, 700);
+        bounceOut(g.rimFront - W*0.2); break;
+      case 'airShort':
+        go(g.rimFront - W*0.07, fl, arcH*0.85, 1080);
+        bounceOut(g.rimFront - W*0.15); break;
+      case 'airLong':
+        go(g.boardX - r, g.rimY - H*0.13, arcH*1.1, 1000, 'board');
+        go(g.rimC - W*0.03, fl, H*0.03, 560);
+        bounceOut(g.rimC - W*0.1); break;
+    }
+    return P;
+  }
+
+  const CALLS = {
+    swish:'Swish.', rattleIn:'Rattled in.', rattleOut:'In and out.',
+    short:'Front rim.', long:'Back iron.', airShort:'Airball, short.', airLong:'Airball, long.'
+  };
+  const MAKES = new Set(['swish','rattleIn']);
+
+  function judge(n){
+    const d = Math.abs(n - 0.5), low = n < 0.5;
+    if (d <= 0.025) return 'swish';
+    if (d <= 0.08) return Math.random() < 0.5 ? 'rattleIn' : (Math.random() < 0.5 ? 'rattleOut' : (low ? 'short' : 'long'));
+    if (d <= 0.32) return low ? 'short' : 'long';
+    return low ? 'airShort' : 'airLong';
+  }
+
+  /* ---------- UI helpers ---------- */
+  const status = $('#status'), call = $('#call'), shootBtn = $('#shootBtn');
+  const need = () => S.level + 1;
+  function lights(){
+    const box = $('#makeLights');
+    if (box.children.length !== need()){
+      box.innerHTML = '';
+      for (let i = 0; i < need(); i++){ const el = document.createElement('i'); el.className = 'light make'; box.appendChild(el); }
+    }
+    [...box.children].forEach((el, i) => el.classList.toggle('on', S.makes > i));
+    $('#makeLabel').textContent = 'Makes in a row (' + S.makes + ' of ' + need() + ')';
+    $('#sLevel').textContent = S.level;
+    $('#x1').classList.toggle('on', S.misses >= 1);
+    $('#x2').classList.toggle('on', S.misses >= 2);
+    $('#sShots').textContent = S.shots;
+    $('#sMade').textContent = S.made;
+    $('#sRuns').textContent = S.runs + '/3';
+  }
+  function legs(){
+    const lvl = S.runs;
+    $('#legs').textContent = 'Legs: ' + (lvl === 0 ? 'fresh' : lvl === 1 ? 'warm' : lvl < 4 ? 'heavy' : 'gone');
+  }
+
+  /* ---------- shooting ---------- */
+  function shoot(){
+    if (S.phase !== 'aim' || S.picking) return;
+    S.result = judge(S.needle);
+    S.path = buildPath(S.result);
+    S.seg = 0; S.segStart = performance.now();
+    S.phase = 'flight'; S.shootPose = performance.now();
+    shootBtn.disabled = true;
+    call.textContent = '';
+  }
+
+  function resolveShot(){
+    const made = MAKES.has(S.result);
+    S.shots++;
+    if (made){ S.made++; S.makes++; S.misses = 0; }
+    else { S.misses++; S.makes = 0; S.booAt = performance.now(); boo(); }
+    call.textContent = CALLS[S.result];
+    lights();
+
+    if (S.result === 'airShort' || S.result === 'airLong'){
+      S.phase = 'penalty';
+      status.textContent = 'Airball. Back to level 1.';
+      S.timer = setTimeout(() => gameOver('airball'), 900);
+      return;
+    }
+
+    if (S.makes >= need()){
+      S.phase = 'won';
+      status.textContent = need() + ' in a row. Level ' + S.level + ' cleared.';
+      S.timer = setTimeout(showWin, 700);
+      return;
+    }
+    if (S.misses >= 2){
+      S.phase = 'penalty';
+      status.textContent = 'Two straight misses. Baseline.';
+      S.timer = setTimeout(startSprint, 900);
+      return;
+    }
+    const left = need() - S.makes;
+    if (made) status.textContent = left === 1 ? S.makes + ' straight. Make the next one to clear the level.' : S.makes + ' straight. ' + left + ' more to go.';
+    else if (S.misses === 1) status.textContent = 'Missed one. Miss the next and you\u2019re running.';
+    S.phase = 'aim'; shootBtn.disabled = false;
+  }
+
+  /* ---------- sprint ---------- */
+  const sprint = $('#sprint'), runner = $('#runner'), clock = $('#clock'), runBtn = $('#runBtn');
+  const STEPS = 36;
+  const R = {steps:0, t0:0, done:false, retry:false};
+  const LIMIT = 6.3;
+  function startSprint(again){
+    S.phase = 'sprint';
+    R.steps = 0; R.t0 = 0; R.done = false; R.retry = false;
+    $('#sprintText').textContent = again
+      ? 'Too slow. Run it again, and get it under ' + LIMIT + ' seconds this time.'
+      : 'Two straight misses. Tap Run as fast as you can, baseline to baseline and back. Over ' + LIMIT + ' seconds and you run it again.';
+    runBtn.textContent = 'Run';
+    clock.textContent = '0.00s';
+    clock.style.color = '';
+    placeRunner();
+    sprint.hidden = false;
+    runBtn.focus({preventScroll:true});
+  }
+  function placeRunner(){
+    const half = STEPS/2;
+    const p = R.steps <= half ? R.steps/half : 1 - (R.steps-half)/half;
+    runner.style.left = (6 + p*88) + '%';
+  }
+  function step(){
+    if (S.phase !== 'sprint') return;
+    if (R.done){ R.retry ? runAgain() : backToLine(); return; }
+    if (!R.t0) R.t0 = performance.now();
+    R.steps++;
+    placeRunner();
+    if (R.steps >= STEPS){
+      R.done = true;
+      const t = (performance.now() - R.t0)/1000;
+      clock.textContent = t.toFixed(2) + 's';
+      if (t > LIMIT){
+        R.retry = true;
+        clock.style.color = 'var(--miss)';
+        $('#sprintText').textContent = t.toFixed(2) + ' seconds. That\u2019s over ' + LIMIT + '. Coach says run it again.';
+        runBtn.textContent = 'Run it again';
+        return;
+      }
+      clock.style.color = 'var(--make)';
+      const pb = S.best === null || t < S.best;
+      if (pb) S.best = t;
+      $('#sprintText').textContent = pb ? 'Under ' + LIMIT + '. Fastest down and back yet.' : 'Under ' + LIMIT + '. Best so far: ' + S.best.toFixed(2) + 's.';
+      runBtn.textContent = 'Back to the line';
+    }
+  }
+  const MAX_RUNS = 3;
+  function runAgain(){
+    S.runs++;
+    S.speed = Math.min(2.6, S.speed + 0.15);
+    lights(); legs();
+    if (S.runs >= MAX_RUNS){ sprint.hidden = true; gameOver(); return; }
+    startSprint(true);
+  }
+  function backToLine(){
+    sprint.hidden = true;
+    S.runs++; S.misses = 0; S.makes = 0;
+    S.speed = Math.min(2.6, S.speed + 0.15);
+    lights(); legs();
+    if (S.runs >= MAX_RUNS){ gameOver(); return; }
+    call.textContent = '';
+    status.textContent = S.runs === MAX_RUNS - 1
+      ? 'Back on the line. One more down and back this level and you start over at level 1.'
+      : 'Back on the line. Your legs are heavier, so the needle\u2019s quicker.';
+    S.phase = 'aim'; shootBtn.disabled = false; shootBtn.focus({preventScroll:true});
+  }
+
+  /* ---------- win ---------- */
+  const win = $('#win');
+  function showWin(){
+    const runs = S.runs === 0 ? 'no down and backs' : S.runs === 1 ? 'one down and back' : S.runs + ' down and backs';
+    $('#winTitle').textContent = 'Level ' + S.level + ' cleared';
+    $('#winText').textContent = 'Done in ' + S.shots + (S.shots === 1 ? ' shot' : ' shots') + ' with ' + runs + '. Next up: ' + (need() + 1) + ' in a row.';
+    $('#againBtn').textContent = 'Start level ' + (S.level + 1);
+    win.hidden = false;
+    $('#againBtn').focus({preventScroll:true});
+  }
+  function gameOver(reason){
+    S.phase = 'over';
+    call.textContent = '';
+    const air = reason === 'airball';
+    status.textContent = (air ? 'Airball.' : 'Three down and backs.') + ' Back to level 1.';
+    $('#winTitle').textContent = air ? 'Airball' : 'Back to level 1';
+    $('#winText').textContent = (air
+      ? 'You airballed on level ' + S.level + '.'
+      : 'That’s three down and backs on level ' + S.level + '.') + ' You start over at level 1, 2 in a row.';
+    $('#againBtn').textContent = 'Restart at level 1';
+    win.hidden = false;
+    $('#againBtn').focus({preventScroll:true});
+  }
+  function reset(){
+    win.hidden = true;
+    const next = S.phase === 'over' ? 1 : S.level + 1;
+    Object.assign(S, {phase:'aim', level:next, makes:0, misses:0, shots:0, made:0, runs:0, speed:1.15 + (next - 1)*0.1, path:null, result:null, ball:null});
+    lights(); legs();
+    call.textContent = '';
+    status.textContent = 'Level ' + S.level + ': make ' + need() + ' in a row.';
+    shootBtn.disabled = false; shootBtn.focus({preventScroll:true});
+  }
+
+  /* ---------- input ---------- */
+  shootBtn.addEventListener('pointerdown', e => { e.preventDefault(); shoot(); });
+  runBtn.addEventListener('pointerdown', e => { e.preventDefault(); step(); });
+  $('#againBtn').addEventListener('click', reset);
+  shootBtn.addEventListener('click', e => { if (e.detail === 0) shoot(); });   // keyboard-activated click
+  runBtn.addEventListener('click', e => { if (e.detail === 0) step(); });
+  window.addEventListener('keydown', e => {
+    if (S.picking) return;
+    if (e.repeat && S.phase !== 'sprint') return;
+    const k = e.key;
+    if (k === ' ' || k === 'Spacebar'){
+      if (S.phase === 'aim'){ e.preventDefault(); shoot(); }
+      else if (S.phase === 'sprint'){ e.preventDefault(); if (!e.repeat) step(); }
+      else if ((S.phase === 'won' || S.phase === 'over') && !win.hidden){ e.preventDefault(); reset(); }
+    } else if ((k === 'ArrowLeft' || k === 'ArrowRight') && S.phase === 'sprint' && !e.repeat){
+      e.preventDefault(); step();
+    }
+  });
+
+  /* ---------- drawing ---------- */
+  function drawScene(now){
+    const g = geo();
+    // wall
+    const wall = ctx.createLinearGradient(0,0,0,H*0.74);
+    wall.addColorStop(0,'#24365F'); wall.addColorStop(1,'#33497C');
+    ctx.fillStyle = wall; ctx.fillRect(0,0,W,H*0.74);
+    drawCrowd(now);
+    // wall padding stripe
+    ctx.fillStyle = '#1E2C50'; ctx.fillRect(0,H*0.62,W,H*0.12);
+    ctx.fillStyle = S.team ? S.team[3] : '#E4572E'; ctx.fillRect(0,H*0.62,W,4);
+    if (S.team){ ctx.fillStyle = S.team[1]; ctx.fillRect(0,H*0.62 + 4,W,4); }
+    // floor
+    const fl = ctx.createLinearGradient(0,H*0.74,0,H);
+    fl.addColorStop(0,'#C88E52'); fl.addColorStop(1,'#E2AE72');
+    ctx.fillStyle = fl; ctx.fillRect(0,H*0.74,W,H*0.26);
+    ctx.strokeStyle = 'rgba(120,70,30,.18)'; ctx.lineWidth = 1;
+    for (let y = H*0.74 + 6, i = 0; y < H; y += 5 + i*1.3, i++){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+    // lane paint + free throw line
+    ctx.save();
+    ctx.globalAlpha = S.team ? 0.8 : 1;
+    ctx.fillStyle = S.team ? S.team[1] : 'rgba(228,87,46,.55)';
+    ctx.beginPath(); ctx.moveTo(g.sx + W*0.04, H*0.8); ctx.lineTo(W, H*0.8); ctx.lineTo(W, H*0.93); ctx.lineTo(g.sx + W*0.01, H*0.93); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    if (S.team){
+      ctx.strokeStyle = S.team[3]; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(g.sx + W*0.04, H*0.8 + 4); ctx.lineTo(W, H*0.8 + 4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(g.sx + W*0.01, H*0.93 - 4); ctx.lineTo(W, H*0.93 - 4); ctx.stroke();
+    }
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(g.sx + W*0.04, H*0.8); ctx.lineTo(g.sx + W*0.01, H*0.93); ctx.stroke();
+
+    // stanchion
+    const postX = g.boardX + W*0.07;
+    ctx.fillStyle = '#9AA3B8'; ctx.fillRect(postX, g.rimY - H*0.06, Math.max(6,W*0.012), g.floor - g.rimY + H*0.06);
+    ctx.fillRect(g.boardX, g.rimY - H*0.06, postX - g.boardX, 6);
+    ctx.fillStyle = '#1E2C50'; ctx.fillRect(postX - W*0.02, g.floor - H*0.05, W*0.06, H*0.07);
+    // backboard
+    ctx.fillStyle = 'rgba(255,255,255,.92)';
+    ctx.fillRect(g.boardX - 2, g.rimY - H*0.18, 7, H*0.24);
+
+    // shooter
+    drawShooter(g, now);
+  }
+
+  function drawShooter(g, now){
+    const x = g.sx, f = g.floor, h = H*0.4;
+    const up = S.phase !== 'aim' && now - S.shootPose < 600;
+    ctx.lineCap = 'round';
+    // legs
+    ctx.strokeStyle = '#3A2A20'; ctx.lineWidth = Math.max(6,h*0.07);
+    const knee = up ? 0 : h*0.03;
+    ctx.beginPath(); ctx.moveTo(x - h*0.05, f); ctx.lineTo(x - h*0.03 + knee, f - h*0.22); ctx.lineTo(x, f - h*0.42); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + h*0.06, f); ctx.lineTo(x + h*0.05 + knee, f - h*0.22); ctx.lineTo(x + h*0.02, f - h*0.42); ctx.stroke();
+    // shoes
+    ctx.fillStyle = '#F2F2F2';
+    ctx.fillRect(x - h*0.09, f - h*0.03, h*0.1, h*0.035);
+    ctx.fillRect(x + h*0.03, f - h*0.03, h*0.1, h*0.035);
+    // shorts + jersey
+    const T = S.team || ['', '#E4572E', '#FFFFFF', '#1E2C50'];
+    ctx.fillStyle = T[1]; ctx.fillRect(x - h*0.07, f - h*0.5, h*0.15, h*0.13);
+    ctx.fillStyle = T[3]; ctx.fillRect(x - h*0.07, f - h*0.5, h*0.025, h*0.13); ctx.fillRect(x + h*0.055, f - h*0.5, h*0.025, h*0.13);
+    ctx.fillStyle = T[1]; ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(x - h*0.075, f - h*0.82, h*0.16, h*0.35, 6) : ctx.rect(x - h*0.075, f - h*0.82, h*0.16, h*0.35);
+    ctx.fill();
+    ctx.strokeStyle = T[3]; ctx.lineWidth = 2; ctx.stroke();
+    // number
+    ctx.fillStyle = T[2]; ctx.font = `600 ${Math.round(h*0.12)}px Teko, sans-serif`; ctx.textAlign = 'center';
+    ctx.fillText(String(S.number ?? '2'), x + h*0.005, f - h*0.6);
+    // head
+    ctx.fillStyle = '#7A4E33'; ctx.beginPath(); ctx.arc(x + h*0.01, f - h*0.9, h*0.07, 0, Math.PI*2); ctx.fill();
+    // arms
+    ctx.strokeStyle = '#7A4E33'; ctx.lineWidth = Math.max(4,h*0.045);
+    const sh = {x:x + h*0.04, y:f - h*0.78};
+    const hand = up ? {x: g.rel.x, y: g.rel.y + g.br*0.4} : {x: g.hold.x, y: g.hold.y};
+    const elbow = up ? {x: sh.x + h*0.06, y: sh.y - h*0.12} : {x: sh.x + h*0.03, y: sh.y + h*0.16};
+    ctx.beginPath(); ctx.moveTo(sh.x, sh.y); ctx.lineTo(elbow.x, elbow.y); ctx.lineTo(hand.x, hand.y); ctx.stroke();
+  }
+
+  function drawBall(x, y, r, spin){
+    ctx.save(); ctx.translate(x,y); ctx.rotate(spin);
+    ctx.fillStyle = '#E8722A'; ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#4A2410'; ctx.lineWidth = Math.max(1, r*0.12);
+    ctx.beginPath(); ctx.moveTo(-r,0); ctx.lineTo(r,0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,-r); ctx.lineTo(0,r); ctx.stroke();
+    ctx.beginPath(); ctx.arc(-r*1.15,0,r*0.75,-0.9,0.9); ctx.stroke();
+    ctx.beginPath(); ctx.arc(r*1.15,0,r*0.75,Math.PI-0.9,Math.PI+0.9); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawHoop(g, now){
+    // net
+    const wave = Math.max(0, 1 - (now - S.netHit)/450);
+    const sway = Math.sin((now - S.netHit)/40) * wave * g.br*0.6;
+    const nh = H*0.11 + wave*H*0.02;
+    const tf = g.rimFront, tb = g.rimBack, bf = g.rimFront + g.rimLen*0.22 + sway, bb = g.rimBack - g.rimLen*0.22 + sway;
+    ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 1.4;
+    const n = 6;
+    for (let i = 0; i <= n; i++){
+      const t = i/n;
+      ctx.beginPath(); ctx.moveTo(tf + (tb-tf)*t, g.rimY); ctx.lineTo(bf + (bb-bf)*(1-t), g.rimY + nh); ctx.stroke();
+    }
+    for (let j = 1; j <= 3; j++){
+      const t = j/3, y = g.rimY + nh*t;
+      ctx.beginPath(); ctx.moveTo(tf + (bf-tf)*t, y); ctx.lineTo(tb + (bb-tb)*t, y); ctx.stroke();
+    }
+    // rim
+    ctx.strokeStyle = '#E4572E'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(g.rimFront, g.rimY); ctx.lineTo(g.boardX, g.rimY); ctx.stroke();
+  }
+
+  let last = performance.now();
+  function frame(now){
+    const dt = Math.min(0.05, (now - last)/1000); last = now;
+    if (!W || !H){ requestAnimationFrame(frame); return; }
+    const g = geo();
+
+    // needle
+    if (S.phase === 'aim'){
+      S.needle += S.dir * S.speed * dt;
+      if (S.needle >= 1){ S.needle = 1; S.dir = -1; }
+      if (S.needle <= 0){ S.needle = 0; S.dir = 1; }
+    }
+    $('#needle').style.left = (S.needle*100) + '%';
+    if (S.phase === 'sprint' && R.t0 && !R.done){
+      const t = (now - R.t0)/1000;
+      clock.textContent = t.toFixed(2) + 's';
+      clock.style.color = t > LIMIT ? 'var(--miss)' : '';
+    }
+
+    ctx.clearRect(0,0,W,H);
+    drawScene(now);
+
+    // ball
+    let bx = g.hold.x, by = g.hold.y - g.br*0.3, spin = 0;
+    if (S.phase === 'flight' && S.path){
+      let s = S.path[S.seg], t = (now - S.segStart)/s.dur;
+      while (t >= 1){
+        if (s.tag === 'net') onNet(now);
+        S.seg++; S.segStart += s.dur;
+        if (S.seg >= S.path.length){ S.ball = {x:s.x1, y:s.y1}; S.phase = 'resolving'; resolveShot(); break; }
+        s = S.path[S.seg]; t = (now - S.segStart)/s.dur;
+      }
+      if (S.phase === 'flight'){
+        bx = s.x0 + (s.x1 - s.x0)*t;
+        by = s.y0 + (s.y1 - s.y0)*t - 4*s.arc*t*(1-t);
+        spin = -(now - S.shootPose)/120;
+      } else { bx = S.ball.x; by = S.ball.y; }
+    } else if (S.phase !== 'aim' && S.ball){
+      bx = S.ball.x; by = S.ball.y;
+    }
+    drawBall(bx, by, g.br, spin);
+    drawHoop(g, now);
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- teams ---------- */
+  // [name, jersey, number, trim]
+  const TEAMS = [
+    ['Atlanta Hawks','#C8102E','#FFFFFF','#C1D32F'],
+    ['Boston Celtics','#007A33','#FFFFFF','#BA9653'],
+    ['Brooklyn Nets','#000000','#FFFFFF','#777D84'],
+    ['Charlotte Hornets','#00788C','#FFFFFF','#1D1160'],
+    ['Chicago Bulls','#CE1141','#FFFFFF','#000000'],
+    ['Cleveland Cavaliers','#860038','#FDBB30','#041E42'],
+    ['Dallas Mavericks','#00538C','#FFFFFF','#B8C4CA'],
+    ['Denver Nuggets','#0E2240','#FEC524','#8B2131'],
+    ['Detroit Pistons','#C8102E','#FFFFFF','#1D42BA'],
+    ['Golden State Warriors','#1D428A','#FFC72C','#FFFFFF'],
+    ['Houston Rockets','#CE1141','#FFFFFF','#000000'],
+    ['Indiana Pacers','#002D62','#FDBB30','#BEC0C2'],
+    ['LA Clippers','#1D428A','#FFFFFF','#C8102E'],
+    ['Los Angeles Lakers','#FDB927','#552583','#552583'],
+    ['Memphis Grizzlies','#12173F','#FFFFFF','#5D76A9'],
+    ['Miami Heat','#98002E','#FFFFFF','#F9A01B'],
+    ['Milwaukee Bucks','#00471B','#EEE1C6','#0077C0'],
+    ['Minnesota Timberwolves','#0C2340','#FFFFFF','#78BE20'],
+    ['New Orleans Pelicans','#0C2340','#FFFFFF','#C8102E'],
+    ['New York Knicks','#006BB6','#FFFFFF','#F58426'],
+    ['Oklahoma City Thunder','#007AC1','#FFFFFF','#EF3B24'],
+    ['Orlando Magic','#0077C0','#FFFFFF','#000000'],
+    ['Philadelphia 76ers','#006BB6','#FFFFFF','#ED174C'],
+    ['Phoenix Suns','#1D1160','#E56020','#E56020'],
+    ['Portland Trail Blazers','#000000','#FFFFFF','#E03A3E'],
+    ['Sacramento Kings','#5A2D81','#FFFFFF','#63727A'],
+    ['San Antonio Spurs','#000000','#FFFFFF','#C4CED4'],
+    ['Toronto Raptors','#CE1141','#FFFFFF','#000000'],
+    ['Utah Jazz','#002B5C','#FFFFFF','#F9A01B'],
+    ['Washington Wizards','#002B5C','#FFFFFF','#E31837']
+  ];
+  const picker = $('#picker'), teamsEl = $('#teams');
+  TEAMS.forEach((t, i) => {
+    const b = document.createElement('button');
+    b.className = 'team';
+    b.innerHTML = '<span class="swatch" style="background:' + t[1] + ';color:' + t[2] + ';box-shadow:inset 0 0 0 2px ' + t[3] + '">2</span>' + t[0];
+    b.addEventListener('click', () => pickTeam(i));
+    teamsEl.appendChild(b);
+  });
+  const step1 = $('#step1'), step2 = $('#step2'), numInput = $('#numInput'), bigJersey = $('#bigJersey');
+  let pending = null;
+  function pickTeam(i){
+    pending = TEAMS[i];
+    initAudio();
+    bigJersey.style.background = pending[1];
+    bigJersey.style.color = pending[2];
+    bigJersey.style.boxShadow = 'inset 0 0 0 4px ' + pending[3];
+    $('#numText').textContent = 'You’re on the ' + pending[0] + '. Choose any number from 0 to 99.';
+    if (S.number !== undefined) numInput.value = S.number;
+    bigJersey.textContent = numInput.value || '0';
+    step1.hidden = true; step2.hidden = false;
+    picker.scrollTop = 0;
+    numInput.focus(); numInput.select();
+  }
+  numInput.addEventListener('input', () => {
+    numInput.value = numInput.value.replace(/\D/g, '').slice(0, 2);
+    bigJersey.textContent = numInput.value || '0';
+  });
+  function startGame(){
+    S.team = pending;
+    S.number = numInput.value || '0';
+    document.documentElement.style.setProperty('--jersey', S.team[1]);
+    picker.hidden = true;
+    S.picking = false;
+    buildCrowd();
+    shootBtn.focus({preventScroll:true});
+  }
+  $('#startBtn').addEventListener('click', startGame);
+  numInput.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); startGame(); } });
+  $('#backBtn').addEventListener('click', () => { step2.hidden = true; step1.hidden = false; });
+  $('#teamBtn').addEventListener('click', () => {
+    if (S.phase !== 'aim') return;
+    S.picking = true; step2.hidden = true; step1.hidden = false; picker.hidden = false;
+  });
+
+  /* ---------- crowd ---------- */
+  let crowd = [];
+  const SKIN = ['#F1C9A5','#E0AC82','#C68642','#8D5524','#5C3A21','#3B2416'];
+  const SHIRTS = ['#E9E9E9','#3B4A6B','#7A8597','#B23A48','#2E6E4E','#D9A441','#5B4B8A'];
+  function buildCrowd(){
+    crowd = [];
+    const T = S.team;
+    const others = TEAMS.filter(x => x !== T);
+    S.rival = others[Math.floor(Math.random()*others.length)];
+    const R2 = S.rival;
+    for (let r = 0; r < 5; r++){
+      const n = 20 + r*2;
+      for (let i = 0; i < n; i++){
+        if (Math.random() < 0.07) continue;
+        const x = (i + 0.5 + (Math.random() - 0.5)*0.35)/n;
+        const away = x > 0.3 && x < 0.58;
+        const roll = Math.random();
+        const shirt = away
+          ? (roll < 0.7 ? R2[1] : R2[3])
+          : T && roll < 0.45 ? T[1] : T && roll < 0.6 ? T[3] : SHIRTS[Math.floor(Math.random()*SHIRTS.length)];
+        crowd.push({r, x, away, shirt, skin:SKIN[Math.floor(Math.random()*SKIN.length)], ph:Math.random()*6.28});
+      }
+    }
+  }
+  function drawCrowd(now){
+    if (!crowd.length) return;
+    const cheer = Math.max(0, 1 - (now - S.cheerAt)/1600);
+    const jeer = Math.max(0, 1 - (now - S.booAt)/1800);
+    for (let r = 0; r < 5; r++){
+      const y = H*(0.13 + r*0.1), s = H*(0.03 + r*0.004);
+      for (const p of crowd){
+        if (p.r !== r) continue;
+        const x = p.x*W;
+        // home fans cheer makes and slump on misses; away fans boo misses
+        const hype = p.away ? jeer : cheer;
+        const jump = hype > 0 ? Math.abs(Math.sin(now/(p.away ? 140 : 110) + p.ph))*s*0.8*hype : 0;
+        const slump = !p.away && jeer > 0 ? s*0.2*jeer : 0;
+        const by = y + Math.sin(now/700 + p.ph)*s*0.05 - jump + slump;
+        if (hype > 0.25 && p.away){
+          // thumbs down: arms out and pumping downward
+          const pump = Math.sin(now/90 + p.ph)*s*0.3;
+          ctx.strokeStyle = p.skin; ctx.lineWidth = Math.max(2, s*0.22); ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(x - s*0.55, by + s*0.1); ctx.lineTo(x - s*1.1, by - s*0.2 + pump);
+          ctx.moveTo(x + s*0.55, by + s*0.1); ctx.lineTo(x + s*1.1, by - s*0.2 - pump);
+          ctx.stroke();
+        } else if (hype > 0.25){
+          ctx.strokeStyle = p.skin; ctx.lineWidth = Math.max(2, s*0.22); ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(x - s*0.55, by); ctx.lineTo(x - s*0.85, by - s*1.1);
+          ctx.moveTo(x + s*0.55, by); ctx.lineTo(x + s*0.85, by - s*1.1);
+          ctx.stroke();
+        }
+        ctx.fillStyle = p.shirt; ctx.fillRect(x - s*0.65, by - s*0.1, s*1.3, s*1.4);
+        ctx.fillStyle = p.skin; ctx.beginPath(); ctx.arc(x, by - s*0.5, s*0.42, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.fillStyle = '#16213F'; ctx.fillRect(0, y + s*0.75, W, s*0.6);
+    }
+    ctx.fillStyle = 'rgba(30,44,80,.28)'; ctx.fillRect(0, 0, W, H*0.62);
+    if (jeer > 0.15){
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, jeer*1.6);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '600 ' + Math.round(H*0.11) + 'px Teko, sans-serif';
+      ctx.textAlign = 'center';
+      const wob = Math.sin(now/60)*H*0.008;
+      ctx.fillText('BOOOO!', W*0.44 + wob, H*0.16);
+      ctx.restore();
+    }
+  }
+
+  /* ---------- sound ---------- */
+  let AC = null, soundOn = true;
+  function initAudio(){
+    try {
+      if (!AC){ const C = window.AudioContext || window.webkitAudioContext; if (C) AC = new C(); }
+      if (AC && AC.state === 'suspended') AC.resume();
+    } catch(e){}
+  }
+  function noise(dur, type, freq, gain, attack){
+    if (!AC || !soundOn) return;
+    try {
+      const n = Math.floor(AC.sampleRate*dur), buf = AC.createBuffer(1, n, AC.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = Math.random()*2 - 1;
+      const src = AC.createBufferSource(); src.buffer = buf;
+      const f = AC.createBiquadFilter(); f.type = type; f.frequency.value = freq;
+      const g = AC.createGain(), t = AC.currentTime;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(gain, t + attack);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(f); f.connect(g); g.connect(AC.destination);
+      src.start();
+    } catch(e){}
+  }
+  function boo(){
+    if (!AC || !soundOn) return;
+    try {
+      // A crowd of voices singing a falling "booo": soft vocal tones shaped
+      // toward the "oo" vowel, each with its own pitch, wobble and timing.
+      // Two swells, like a section of away fans going "BOOO... BOOOOO".
+      const t = AC.currentTime, dur = 2.8;
+      const master = AC.createGain();
+      master.gain.setValueAtTime(0.0001, t);
+      master.gain.exponentialRampToValueAtTime(0.7, t + 0.09);
+      master.gain.linearRampToValueAtTime(0.32, t + 0.95);
+      master.gain.linearRampToValueAtTime(0.75, t + 1.25);
+      master.gain.setValueAtTime(0.75, t + 1.7);
+      master.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 850; lp.Q.value = 0.7;
+      const oo = AC.createBiquadFilter(); oo.type = 'peaking'; oo.frequency.value = 320; oo.Q.value = 1.4; oo.gain.value = 9;
+      const comp = AC.createDynamicsCompressor();
+      lp.connect(oo); oo.connect(master); master.connect(comp); comp.connect(AC.destination);
+      for (let i = 0; i < 24; i++){
+        const deep = Math.random() < 0.65;
+        const base = deep ? 95 + Math.random()*45 : 185 + Math.random()*65;
+        const start = t + Math.random()*0.12, end = t + dur - Math.random()*0.4;
+        const o = AC.createOscillator(); o.type = 'triangle';
+        o.frequency.setValueAtTime(base*0.85, start);
+        o.frequency.linearRampToValueAtTime(base*1.08, start + 0.1);
+        o.frequency.linearRampToValueAtTime(base*0.95, t + 0.95);
+        o.frequency.linearRampToValueAtTime(base*1.1, t + 1.3);
+        o.frequency.linearRampToValueAtTime(base*0.8, end);
+        const lfo = AC.createOscillator(); lfo.frequency.value = 3.5 + Math.random()*2.5;
+        const depth = AC.createGain(); depth.gain.value = base*0.03;
+        lfo.connect(depth); depth.connect(o.frequency);
+        const amp = 0.035 + Math.random()*0.03;
+        const v = AC.createGain();
+        v.gain.setValueAtTime(0.0001, start);
+        v.gain.exponentialRampToValueAtTime(amp, start + 0.07);
+        v.gain.setValueAtTime(amp, end - 0.5);
+        v.gain.exponentialRampToValueAtTime(0.0001, end);
+        o.connect(v); v.connect(lp);
+        o.start(start); lfo.start(start); o.stop(end + 0.05); lfo.stop(end + 0.05);
+      }
+      // A real voice on top so it says the word.
+      if ('speechSynthesis' in window){
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance('Booooo! Booooooo!');
+        u.pitch = 0.2; u.rate = 0.6; u.volume = 1;
+        speechSynthesis.speak(u);
+      }
+    } catch(e){}
+  }
+
+  /* ---------- restart ---------- */
+  const restartBtn = $('#restartBtn');
+  let restartArmed = 0;
+  restartBtn.addEventListener('click', () => {
+    if (S.picking) return;
+    if (!restartArmed){
+      restartBtn.textContent = 'Tap again to restart';
+      restartArmed = setTimeout(() => { restartArmed = 0; restartBtn.textContent = 'Restart game'; }, 3000);
+      return;
+    }
+    clearTimeout(restartArmed); restartArmed = 0;
+    restartBtn.textContent = 'Restart game';
+    clearTimeout(S.timer);
+    sprint.hidden = true;
+    S.phase = 'over';
+    reset();
+    status.textContent = 'Fresh start. Level 1: make 2 in a row.';
+  });
+
+  function greenGiant(){
+    if (!soundOn || !('speechSynthesis' in window)) return;
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance('Green Giant!');
+      u.pitch = 0.1; u.rate = 0.85; u.volume = 1;
+      speechSynthesis.speak(u);
+    } catch(e){}
+  }
+  function onNet(now){
+    S.netHit = now;
+    S.cheerAt = now;
+    noise(0.35, 'highpass', 3000, 0.25, 0.02);
+    noise(1.8, 'bandpass', 1100, 0.45, 0.15);
+    if (S.result === 'swish') greenGiant();
+  }
+  $('#soundBtn').addEventListener('click', () => {
+    soundOn = !soundOn;
+    $('#soundBtn').textContent = soundOn ? 'Sound on' : 'Sound off';
+    if (soundOn) initAudio();
+    else try { speechSynthesis.cancel(); } catch(e){}
+  });
+
+  lights(); legs();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
